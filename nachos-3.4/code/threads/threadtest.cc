@@ -15,7 +15,7 @@
 #include "thread.h"
 #include "switch.h"
 #include "synch.h"
-
+//#include <cstdlib>
 // testnum is set in main.cc
 int testnum = 1;
 
@@ -51,6 +51,8 @@ printf("Thread Tid %d BEGIN\n", currentThread->GetTid());
     }
 printf("Thread Tid %d END\n", currentThread->GetTid());
 }
+
+//-----------------------------LAB 1 BEGIN------------------------------------
 
 //----------------------------------------------------------------------
 // ThreadTest1
@@ -159,6 +161,10 @@ void MyThreadStatusPrint(int a)
 }
 
 
+//----------------------------------LAB 1 END--------------------------------------
+
+
+//----------------------------------LAB 2 BEGIN-----------------------------------------------
 
 //----------------------------------------------------------------------
 // ThreadTest4
@@ -184,7 +190,7 @@ ThreadTest4()
 }
 
 //----------------------------------------------------------------------
-// PriorityPreempt
+// ThreadTest5
 //     create a thread within a thread to test preempt 
 //     
 //----------------------------------------------------------------------
@@ -222,7 +228,7 @@ void p1(int which)
 
 
 void
-PriorityPreempt()
+ThreadTest5()
 {
     Thread *t1 = new Thread("Thread1", 8);
 
@@ -248,6 +254,280 @@ void ThreadTest6()
 
 }
 
+//---------------------------------------LAB 2 END ------------------------------------------
+
+
+//---------------------------------LAB 3 BEGIN-------------------------------------------------
+//----------------------------------------------------------------------
+// Producer
+//  Produce products and wait for customer
+// Consumer
+//  Wait for product and remove them
+//----------------------------------------------------------------------
+
+//----------------------------------------------------------------------
+// ThreadTest7
+//  use lock and condition to present producer/consuer problem
+//----------------------------------------------------------------------
+
+
+
+static int productnum=0;
+static int maxproduct=0;
+Condition * cond;
+Lock * lock;
+
+void Producer(int which)
+{
+    DEBUG('t', "Entering Producer");
+
+    for(int i=0;i<8;++i)
+    {
+        int temp= 1 + Random() + (TimerTicks * 2);
+        if(temp%2)  currentThread->Yield();
+        lock->Acquire();
+        while(productnum>=maxproduct)
+        {
+            printf("Full! Producer (%d)\n", which);
+            cond->Wait(lock);
+            printf("Producer (%d) continues\n", which);
+        }
+        productnum++;
+        printf("Producer %d produces one product, productnum=%d\n", which, productnum);
+        if(productnum==1)
+            cond->Broadcast(lock);
+        lock->Release();
+    }
+}
+
+void Consumer(int which)
+{
+    DEBUG('t', "Entering Consumer");
+
+    for(int i=0;i<6;++i)
+    {
+        int temp= 1 + Random() + (TimerTicks * 2);
+        if(temp%2)  currentThread->Yield();
+        lock->Acquire();
+        while(productnum<=0)
+        {
+            printf("Empty! Consumer (%d)\n", which);
+            cond->Wait(lock);
+            printf("Consumer(%d) continues\n", which);
+        }
+        productnum--;
+        printf("Consumer %d consumes one product, productnum=%d\n", which, productnum);
+        if(productnum==maxproduct-1)
+            cond->Broadcast(lock);
+        lock->Release();
+    }
+}
+
+void ThreadTest7()
+{
+    DEBUG("t", "Entering ThreadTest7");
+    cond=new Condition("condition");
+    lock=new Lock("lock");
+    maxproduct=4;
+    Thread *p[2], *c[2];
+    for(int i=0;i<2;++i)
+    {
+        p[i]=new Thread("producer", 3);
+        p[i]->Fork(Producer, (void*)i);
+    }
+    for(int i=0;i<2;++i)
+    {
+        c[i]=new Thread("consumer", 3);
+        c[i]->Fork(Consumer, (void*)i);
+    } 
+}
+
+
+
+
+//----------------------------------------------------------------------
+// ThreadTest8
+//  use semaphore to present producer/consuer problem
+//----------------------------------------------------------------------
+
+Semaphore *full, *empty;
+Semaphore *mutex;
+void Producer_sem(int which)
+{
+    DEBUG("t", "Entering Producer_sem");
+
+    for(int i=0;i<8;++i)
+    {
+    //    int temp= 1 + Random() + (TimerTicks * 2);
+    //    if(temp%2)  currentThread->Yield();
+        empty->P();
+        mutex->P();
+        productnum++;
+        printf("Producer %d produces a product, productnum=%d\n", which, productnum);
+        mutex->V();
+        full->V();
+    }
+}
+
+void Consumer_sem(int which)
+{
+    DEBUG("t", "Entering Consumer_sem");
+
+    for(int i=0;i<6;++i)
+    {
+    //    int temp= 1 + Random() + (TimerTicks * 2);
+     //   if(temp%2)  currentThread->Yield();
+        full->P();
+        mutex->P();
+        productnum--;
+        printf("Consumer %d consumes a product, productnum=%d\n", which, productnum);
+        mutex->V();
+        empty->V();
+    }
+}
+
+void ThreadTest8()
+{
+    full=new Semaphore("full", 0);
+    empty=new Semaphore("empty", 4);
+    mutex=new Semaphore("mutex", 1);
+    Thread *p[2], *c[2];
+    for(int i=0;i<2;++i)
+    {
+        p[i]=new Thread("producer", 3);
+        p[i]->Fork(Producer_sem, (void*)i);
+    }
+    for(int i=0;i<2;++i)
+    {
+        c[i]=new Thread("consumer", 3);
+        c[i]->Fork(Consumer_sem, (void*)i);
+    }
+}
+
+
+
+
+//----------------------------------------------------------------------
+// ThreadTest9
+//  use nachos to realize a barrier
+//----------------------------------------------------------------------
+
+//Lock * lock;
+//Condition * condition;
+int barrier=0;
+int countnum=0;
+
+void BarrierTest(int n)
+{
+    lock->Acquire();
+    countnum++;
+    printf("Thread %s gets the lock\n", currentThread->getName());
+    if(countnum==barrier)
+    {
+        printf("countnum: %d, Broadcast from thread %s\n", countnum, currentThread->getName());
+        cond->Broadcast(lock);
+        lock->Release();
+    }
+    else
+    {
+        printf("countnum: %d, thread %s wait\n", countnum, currentThread->getName());
+        cond->Wait(lock);
+        lock->Release();
+    }
+    printf("thread %s continues to run\n", currentThread->getName());
+
+}
+
+ThreadTest9()
+{
+    barrier=3;
+    lock = new Lock("barrierLock");
+    cond=new Condition("barrierCondition");
+    Thread * t1 = new Thread("t1", 3);;
+    Thread * t2 = new Thread("t2", 3);
+    Thread * t3 = new Thread("t3", 3);
+//    Thread * t4 = new Thread("t4", 4);
+    t1->Fork(BarrierTest, 1);
+    t2->Fork(BarrierTest, 2);
+    t3->Fork(BarrierTest, 3);
+//    t4->Fork(BarrierTest, 4);
+
+}
+
+
+
+//----------------------------------------------------------------------
+// ThreadTest10
+//  use nachos to realize reader-writer problem
+//----------------------------------------------------------------------
+
+//int file=1;
+int readerCount=0;
+Lock * rlock, *wlock;
+
+void Read(int n)
+{
+ //    int temp= 1 + Random() + (TimerTicks * 2);
+ //   if(temp%2)  currentThread->Yield();
+    for(int i=0;i<3;++i)
+    {
+                                   interrupt->OneTick();
+        rlock->Acquire();          interrupt->OneTick();
+        readerCount++;        interrupt->OneTick();
+        if(readerCount==1)      //  interrupt->OneTick();
+        {
+            wlock->Acquire();        interrupt->OneTick();
+        }
+        rlock->Release();        interrupt->OneTick();
+
+        printf("Reader Thread %d comes in\n", n);        interrupt->OneTick();
+        printf("There are %d readers\n", readerCount);
+        printf("Reader Thread %d is reading\n", n);        interrupt->OneTick();
+        printf("Reader Thread %d leaves\n", n);        interrupt->OneTick();
+
+        rlock->Acquire();        interrupt->OneTick();
+        readerCount--;        interrupt->OneTick();
+        if(readerCount==0)
+        {
+            wlock->Release();        interrupt->OneTick();
+        }
+        rlock->Release();        interrupt->OneTick();
+    }
+}
+
+void Write(int n)
+{
+ //   int temp= 1 + Random() + (TimerTicks * 2);
+ //   if(temp%2)  currentThread->Yield();
+    for(int i=0;i<3;++i)
+    {
+        wlock->Acquire();interrupt->OneTick();
+        printf("Writer Thread %d comes in\n", n);interrupt->OneTick();
+        printf("Writer Thread %d is writing\n", n);interrupt->OneTick();
+        printf("Writer Thread %d leaves\n", n);interrupt->OneTick();
+        wlock->Release();interrupt->OneTick();
+    }
+}
+void ThreadTest10()
+{
+    rlock=new Lock("rlock");
+    wlock=new Lock("wlock");
+    Thread * w[2],*r[3]; 
+    for(int i=0;i<2;++i)
+    {
+        w[i] = new Thread("writer", 3);
+    }
+    for(int i=0;i<3;++i)
+    {
+        r[i]=new Thread("reader", 3);
+    }
+    r[0]->Fork(Read, 0);
+    w[0]->Fork(Write, 0);
+    r[1]->Fork(Read, 1);
+    w[1]->Fork(Write, 1);
+    r[2]->Fork(Read, 2);
+}
+
 //----------------------------------------------------------------------
 // ThreadTest
 // 	Invoke a test routine.
@@ -271,11 +551,23 @@ ThreadTest()
 	ThreadTest4();
 	break;
     case 5:
-	PriorityPreempt();
+	ThreadTest5();
 	break;
     case 6:
 	ThreadTest6();
 	break;
+    case 7:
+    ThreadTest7();
+    break;
+    case 8:
+    ThreadTest8();
+    break;
+    case 9:
+    ThreadTest9();
+    break;
+    case 10:
+    ThreadTest10();
+    break;
     default:
 	printf("No test specified.\n");
 	break;

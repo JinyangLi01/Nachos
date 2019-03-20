@@ -62,7 +62,7 @@ int TidFlag[MaxThread];
 static void
 TimerInterruptHandler(int dummy)
 {
-    printf("Tick! ");
+    printf("Tick! "); // used in lab2 testing
 
 
     if (interrupt->getStatus() != IdleMode)
