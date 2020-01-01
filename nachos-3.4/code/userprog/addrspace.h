@@ -20,6 +20,7 @@
 
 class AddrSpace {
   public:
+    AddrSpace(int tid, int currentTid, unsigned int pages);
     AddrSpace(OpenFile *executable);	// Create an address space,
 					// initializing it with the program
 					// stored in the file "executable"
@@ -30,12 +31,19 @@ class AddrSpace {
 
     void SaveState();			// Save/restore address space-specific
     void RestoreState();		// info on a context switch 
+    void RemoveVirtFile();
+    
+    unsigned int GetPage() {
+    	return numPages;
+    }
 
   private:
-    TranslationEntry *pageTable;	// Assume linear page table translation
+    //TranslationEntry *pageTable;	// Assume linear page table translation
 					// for now!
     unsigned int numPages;		// Number of pages in the virtual 
 					// address space
+    //ADD!!!
+    char name[20];
 };
 
 #endif // ADDRSPACE_H

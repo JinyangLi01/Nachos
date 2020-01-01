@@ -127,17 +127,38 @@ Directory::Find(char *name)
 //----------------------------------------------------------------------
 
 bool
-Directory::Add(char *name, int newSector)
-{ 
-    if (FindIndex(name) != -1)
+Directory::Add(char *name, int newSector, bool type)
+{ 	
+    char temp[FileNameMaxLen + 1];
+    int len = strlen(name), j = 0, k = 0;
+    
+    if (name[0] == '/')
+        j++;
+    for (; j < len; ++j) {
+    	if (name[j] == '/') {
+    	    temp[k] = 0;
+    	    k = 0;
+    	} else {
+    	    temp[k++] = name[j];
+    	}
+    }
+    temp[k] = 0;
+    
+    if (FindIndex(temp) != -1)
 	return FALSE;
 
     for (int i = 0; i < tableSize; i++)
         if (!table[i].inUse) {
             table[i].inUse = TRUE;
-            strncpy(table[i].name, name, FileNameMaxLen); 
             table[i].sector = newSector;
-        return TRUE;
+            
+            // ADD!!!
+            table[i].type = type;
+            strncpy(table[i].route, name, RouteMaxLen);
+	    strncpy(table[i].name, temp, FileNameMaxLen);
+            // ADD!!
+            
+            return TRUE;
 	}
     return FALSE;	// no space.  Fix when we have extensible files.
 }
@@ -153,12 +174,23 @@ Directory::Add(char *name, int newSector)
 bool
 Directory::Remove(char *name)
 { 
-    int i = FindIndex(name);
+    int index = -1;
+    for (int i = 0; i < tableSize; i++)
+        if (table[i].inUse && !strncmp(table[i].route, name, RouteMaxLen))
+	    index = i;
+
+    if (index == -1)
+    	return FALSE;
+    table[index].inUse = FALSE;
+    return TRUE;
+
+    /*int i = FindIndex(name);
 
     if (i == -1)
 	return FALSE; 		// name not in directory
     table[i].inUse = FALSE;
     return TRUE;	
+    */
 }
 
 //----------------------------------------------------------------------
@@ -195,3 +227,67 @@ Directory::Print()
     printf("\n");
     delete hdr;
 }
+
+// return the upper directory of request directory/file
+
+int
+Directory::FindRoute(char *name) {
+    int i = 0, j = 0;
+    int len = strlen(name);
+    char *temp = new char[len + 1];
+    int sector = 1;
+    
+    Directory *dir = new Directory(10);
+    OpenFile *openFile = new OpenFile(sector);
+    dir->FetchFrom(openFile);
+    
+    if (name[j] == '/')
+    	j++;
+    	
+    for (; j < len; ++j) {
+    	if (name[j] == '/') {
+    	    temp[i] = 0;
+    	    if ((sector = dir->Find(temp)) == -1)
+    	    	return -1; 
+    	    openFile = new OpenFile(sector);
+    	    dir->FetchFrom(openFile);
+    	    i = 0;
+    	}
+    	else {
+    	    temp[i++] = name[j];
+    	}
+    }
+    
+    delete dir;
+    delete openFile;
+    return sector;
+}
+
+
+// return sector number according to route
+int
+Directory::RouteSearch(char *name) {
+    for (int i = 0; i < tableSize; i++)
+        if (table[i].inUse && !strncmp(table[i].route, name, RouteMaxLen))
+	    return table[i].sector;
+    return -1;		// name not in directory
+}
+
+bool
+Directory::IsEmpty() {
+    for (int i = 0; i < tableSize; ++i) {
+    	if (table[i].inUse)
+    	    return FALSE;
+    }
+    return TRUE;
+}
+
+bool 
+Directory::GetType(char *route) {
+    for (int i = 0; i < tableSize; ++i) {
+    	if (table[i].inUse && !strncmp(table[i].route, route, RouteMaxLen))
+    	   return table[i].type;
+    }
+    return FALSE;
+}
+

@@ -45,6 +45,13 @@ SynchDisk::SynchDisk(char* name)
     semaphore = new Semaphore("synch disk", 0);
     lock = new Lock("synch disk lock");
     disk = new Disk(name, DiskRequestDone, (int) this);
+
+    for (int i = 0; i < NumSectors; ++i) {
+    	mutex[i] = new Semaphore("mutex", 1);
+    	sem[i] = new Semaphore("sem", 1);
+    	readers[i] = 0;
+    	fileCount[i] = 0;
+    }
 }
 
 //----------------------------------------------------------------------
@@ -72,6 +79,7 @@ SynchDisk::~SynchDisk()
 void
 SynchDisk::ReadSector(int sectorNumber, char* data)
 {
+    printf("in SynchDisk::ReadSector, sectorNumber=%d\n", sectorNumber);
     lock->Acquire();			// only one disk I/O at a time
     disk->ReadRequest(sectorNumber, data);
     semaphore->P();			// wait for interrupt
@@ -106,4 +114,39 @@ void
 SynchDisk::RequestDone()
 { 
     semaphore->V();
+}
+
+void 
+SynchDisk::SyncRead(int sectorNumber, char *data) {
+    printf("in SynchDisk::SyncRead, sectorNumber=%d\n",sectorNumber);
+    mutex[sectorNumber]->P();
+    readers[sectorNumber]++;
+    if (readers[sectorNumber] == 1) {
+    	sem[sectorNumber]->P();
+    }
+    mutex[sectorNumber]->V();
+    
+  //  printf("Reader starts reading\n");
+    ReadSector(sectorNumber, data);
+ //   printf("Reader reads from sector %d\n", sectorNumber);
+  //  printf("Reader finishes reading\n");
+    
+    mutex[sectorNumber]->P();
+    readers[sectorNumber]--;
+    if (readers[sectorNumber] == 0) {
+    	sem[sectorNumber]->V();
+    }
+    mutex[sectorNumber]->V();
+}
+
+void 
+SynchDisk::SyncWrite(int sectorNumber, char *data) {
+    sem[sectorNumber]->P();
+    
+    printf("Writer starts writing\n");
+    WriteSector(sectorNumber, data);
+    printf("Writer writes to sector %d\n", sectorNumber);
+    printf("Writer finishes writing\n");
+    
+    sem[sectorNumber]->V();
 }

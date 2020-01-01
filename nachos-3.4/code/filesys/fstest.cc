@@ -23,6 +23,19 @@
 
 #define TransferSize 	10 	// make it small, just to be difficult
 
+void 
+ListDirectory(char *name) {
+    fileSystem->ListDir(name);
+}
+
+void 
+MakeDirectory(char *name) {
+    if (!fileSystem->Create(name, -1)) {	 
+	printf("Couldn't create directory %s\n", name);
+	return;
+    }
+}
+
 //----------------------------------------------------------------------
 // Copy
 // 	Copy the contents of the UNIX file "from" to the Nachos file "to"
@@ -123,7 +136,7 @@ FileWrite()
 	FileSize, ContentSize);
     if (!fileSystem->Create(FileName, 0)) {
       printf("Perf test: can't create %s\n", FileName);
-      return;
+      //return;
     }
     openFile = fileSystem->Open(FileName);
     if (openFile == NULL) {
@@ -132,6 +145,7 @@ FileWrite()
     }
     for (i = 0; i < FileSize; i += ContentSize) {
         numBytes = openFile->Write(Contents, ContentSize);
+        printf("write %d bytes\n", i);
 	if (numBytes < 10) {
 	    printf("Perf test: unable to write %s\n", FileName);
 	    delete openFile;
@@ -158,15 +172,22 @@ FileRead()
     }
     for (i = 0; i < FileSize; i += ContentSize) {
         numBytes = openFile->Read(buffer, ContentSize);
+        printf("read %d bytes\n", i);
 	if ((numBytes < 10) || strncmp(buffer, Contents, ContentSize)) {
 	    printf("Perf test: unable to read %s\n", FileName);
+	    
 	    delete openFile;
 	    delete [] buffer;
+	    
+    	    fileSystem->Remove(FileName);
+	    
 	    return;
 	}
     }
     delete [] buffer;
     delete openFile;	// close file
+    
+    fileSystem->Remove(FileName);
 }
 
 void
@@ -183,3 +204,77 @@ PerformanceTest()
     stats->Print();
 }
 
+void 
+SyncTest() {
+    FileWrite();
+    Thread *r1 = new Thread("reader1", 8);
+    Thread *r2 = new Thread("reader2", 8);
+    r1->Fork(FileRead, (void *)r1->GetTid());
+    r2->Fork(FileRead, (void *)r2->GetTid());
+    FileWrite();
+    fileSystem->Remove(FileName);
+}
+
+void
+PipeReadTest() {
+    char data[50];
+    int length = fileSystem->ReadPipe(data);
+}
+
+void 
+PipeWriteTest() {
+    char data[50];
+    scanf("%s", data);
+    int len = strlen(data);
+    int length = fileSystem->WritePipe(data, len);
+    printf("write: %s, length: %d\n", data, length); 
+}
+
+
+void PipeTest2()
+{
+    printf("Thread 1 communicates with Thread 0\n");
+    printf("Thread 1 reads data from the pipe\n");
+    char data[SectorSize + 1];
+    int length = fileSystem->ReadFromPipe(data, 0, 
+        currentThread->GetTid());
+    data[length]=0;
+    printf("output: %s\n", data);
+}
+
+
+void PipeTest()
+{
+    //printf("Here is PipeTest()\n");
+    printf("Thread 0 communicates with Thread 1\n");
+    printf("Thread 0 writes data into the pipe\n");
+    char input_str[20]="hello";
+    printf("input: hello\n");
+    Thread* th = new Thread("th2");
+    fileSystem->WriteIntoPipe(input_str, strlen(input_str), 
+        currentThread->GetTid(), th->GetTid());
+    th->Fork(PipeTest2, th->GetTid());
+    currentThread->Yield();
+}
+
+
+void MessageTest2()
+{
+    printf("Thread 1 communicates with Thread 0\n");
+    printf("Thread 1 reads message from the buffer\n");
+    char *data = Receive(currentThread->GetTid());
+    ASSERT(data!=NULL);
+    printf("output: %s\n", data);
+}
+
+void MessageTest()
+{
+    printf("Thread 0 communicates with Thread 1\n");
+    printf("Thread 0 writes message into the buffer\n");
+    char input_str[20]="hello";
+    printf("input: hello\n");
+    Thread* th = new Thread("th2");
+    ASSERT(Send(input_str, th->GetTid()) == true);
+    th->Fork(MessageTest2, th->GetTid());
+    currentThread->Yield();
+}

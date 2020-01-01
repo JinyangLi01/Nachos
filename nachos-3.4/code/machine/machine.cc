@@ -61,14 +61,27 @@ Machine::Machine(bool debug)
     mainMemory = new char[MemorySize];
     for (i = 0; i < MemorySize; i++)
       	mainMemory[i] = 0;
+      	
+    // ADD!!!
+    bitMap = new InvertedEntry[NumPhysPages];
+    for (i = 0; i < NumPhysPages; i++) {
+    	bitMap[i].valid = FALSE;
+    	bitMap[i].physicalPage = i;
+    }
+    // ADD!!!  	
+     
+     
 #ifdef USE_TLB
-    tlb = new TranslationEntry[TLBSize];
-    for (i = 0; i < TLBSize; i++)
-	tlb[i].valid = FALSE;
-    pageTable = NULL;
+    //tlb = new TranslationEntry[TLBSize];
+    //tlbTime = new int[TLBSize];
+    //tlbMiss = tlbHit = 0;
+    //FIFO = TRUE;
+    //for (i = 0; i < TLBSize; i++)
+	//tlb[i].valid = FALSE;
+    //pageTable = NULL;
 #else	// use linear page table
-    tlb = NULL;
-    pageTable = NULL;
+    //tlb = NULL;
+    //pageTable = NULL;
 #endif
 
     singleStep = debug;
@@ -83,8 +96,11 @@ Machine::Machine(bool debug)
 Machine::~Machine()
 {
     delete [] mainMemory;
-    if (tlb != NULL)
-        delete [] tlb;
+    delete [] bitMap;
+    //if (tlb != NULL)
+      //  delete [] tlb;
+    //if (tlbTime != NULL)
+    	//delete [] tlbTime;
 }
 
 //----------------------------------------------------------------------
@@ -211,4 +227,91 @@ void Machine::WriteRegister(int num, int value)
 	// DEBUG('m', "WriteRegister %d, value %d\n", num, value);
 	registers[num] = value;
     }
+
+
+
+// ADD!!!!!!!!!
+int Machine::search(int vpn) {
+    int pos = -1;
+    char name[20];
+    OpenFile *v;
+    
+    for (int i = 0; i < NumPhysPages; ++i) {
+    	if (bitMap[i].valid == FALSE) {
+    	    pos = i;
+    	    printf("Allocate physical page %d.\n", i);
+    	    break;
+    	}
+    }
+    
+    if (pos == -1) {
+    	for (int i = 0; i < NumPhysPages; ++i) {
+    	    if (bitMap[i].time == NumPhysPages) {
+    	    	pos = i;
+    	    	break;
+    	    }
+    	}
+    	printf("Main memory is full, allocate physical page %d.\n", pos);
+    	if (bitMap[pos].dirty == TRUE) {
+    	    sprintf(name, "%d", bitMap[pos].tid);
+    	    strcat(name, "virtual-memory");
+    	    v = fileSystem->Open(name);
+  	    v->WriteAt(&mainMemory[pos * PageSize], PageSize, bitMap[pos].virtualPage * PageSize);
+  	    delete v;
+    	}
+    }
+    
+    for (int i = 0; i < NumPhysPages; ++i) {
+    	if (i == pos || !bitMap[i].valid) continue;
+   	bitMap[i].time++;
+    }
+    
+    bitMap[pos].time = 1;
+    bitMap[pos].valid = TRUE;
+    bitMap[pos].tid = currentThread->GetTid();
+    bitMap[pos].virtualPage = vpn;
+    bitMap[pos].readOnly = FALSE;
+    bitMap[pos].dirty = FALSE;
+    bitMap[pos].use = FALSE;
+    
+    sprintf(name, "%d", bitMap[pos].tid);
+    strcat(name, "virtual-memory");
+    v = fileSystem->Open(name);
+    v->ReadAt(&mainMemory[pos * PageSize], PageSize, vpn * PageSize);
+    //printf("reading memory from virtual file %s\n", name);
+    delete v;
+    
+    return pos;
+}
+
+
+void Machine::clear() {
+    /*
+    for (int i = 0; i < pageTableSize; ++i) {
+       int physPage = pageTable[i].physicalPage;
+       if (bitMap[physPage].valid == TRUE) {
+           printf("Deallocate physPage %d.\n", physPage);
+           bitMap[physPage].valid = FALSE;
+       }
+   }
+   */
+    for (int i = 0; i < NumPhysPages; ++i) {
+    	if (bitMap[i].valid == TRUE && bitMap[i].tid == currentThread->GetTid()) {
+    	    bitMap[i].valid = FALSE;
+    	    for (int j = 0; j < NumPhysPages; ++j) {
+    	    	if (i == j || !bitMap[j].valid) continue;
+   	   	if (bitMap[j].time > bitMap[i].time)
+		    bitMap[j].time--;
+    	    }
+    	    printf("Deallocate physical page %d.\n", i);
+    	    //break;
+    	}
+    }
+}
+
+//void Machine::clearTLB() {
+ //   for (int i = 0; i < TLBSize; i++)
+//	tlb[i].valid = FALSE;
+//}
+
 

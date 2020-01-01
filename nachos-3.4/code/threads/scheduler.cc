@@ -21,7 +21,7 @@
 #include "copyright.h"
 #include "scheduler.h"
 #include "system.h"
-#include "thread.h"
+
 //----------------------------------------------------------------------
 // Scheduler::Scheduler
 // 	Initialize the list of ready but not running threads to empty.
@@ -42,14 +42,6 @@ Scheduler::~Scheduler()
     delete readyList; 
 } 
 
-
-List * 
-Scheduler::getReadyList()
-{
-return readyList;
-}
-
-
 //----------------------------------------------------------------------
 // Scheduler::ReadyToRun
 // 	Mark a thread as ready, but not running.
@@ -64,12 +56,7 @@ Scheduler::ReadyToRun (Thread *thread)
     DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
 
     thread->setStatus(READY);
-//put into readylise acccording to priority
-    readyList->SortedInsert((void*)thread, thread->GetPriority());
-  //  if(thread!=currentThread && thread->GetPriority()<currentThread->GetPriority())
-        //currentThread->Yield();
-	thread->SetTimeSlice(InitialTimeSlice);
-    //readyList->Append((void *)thread);
+    readyList->SortedInsert((void *)thread, thread->getPriority());
 }
 
 //----------------------------------------------------------------------

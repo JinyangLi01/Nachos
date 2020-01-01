@@ -140,14 +140,12 @@ Interrupt::Enable()
 
 //----------------------------------------------------------------------
 // Interrupt::OneTick
-//      模拟时钟前进，并且检查是否有待处理的中断
 // 	Advance simulated time and check if there are any pending 
 //	interrupts to be called. 
-//       两种情况会调用OneTick：
+//
 //	Two things can cause OneTick to be called:
 //		interrupts are re-enabled
 //		a user instruction is executed
-//         
 //----------------------------------------------------------------------
 void
 Interrupt::OneTick()
@@ -171,8 +169,6 @@ Interrupt::OneTick()
     while (CheckIfDue(FALSE))		// check for pending interrupts
 	;
     ChangeLevel(IntOff, IntOn);		// re-enable interrupts
-
-//判断当前线程是否需要Yield
     if (yieldOnReturn) {		// if the timer device handler asked 
 					// for a context switch, ok to do it now
 	yieldOnReturn = FALSE;
@@ -281,7 +277,6 @@ Interrupt::Schedule(VoidFunctionPtr handler, int arg, int fromNow, IntType type)
 //----------------------------------------------------------------------
 // Interrupt::CheckIfDue
 // 	Check if an interrupt is scheduled to occur, and if so, fire it off.
-//     如果即将有一个要发生的中断，将时钟时间修改为将来中断发生的时间
 //
 // Returns:
 //	TRUE, if we fired off any interrupt handlers

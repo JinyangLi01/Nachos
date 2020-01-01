@@ -60,10 +60,16 @@ extern int testnum;
 // External functions used by this file
 
 extern void ThreadTest(void), Copy(char *unixFile, char *nachosFile);
-extern void Print(char *file), PerformanceTest(void);
-extern void StartProcess(char *file), ConsoleTest(char *in, char *out);
+extern void Print(char *file), PerformanceTest(void), SyncTest(void), PipeReadTest(void), PipeWriteTest();
+extern void StartProcess(char *file), SyncConsoleTest(char *in, char *out);
 extern void MailTest(int networkID);
-extern void PrintHello();
+extern void PipeTest();
+
+//***************************
+extern void ts();
+extern void MakeDirectory(char *name);
+extern void ListDirectory(char *name);
+//***************************
 
 //----------------------------------------------------------------------
 // main
@@ -86,53 +92,63 @@ main(int argc, char **argv)
 					// for a particular command
 
     DEBUG('t', "Entering main");
-    (void) Initialize(argc, argv); //system.cc中的函数
-    PrintHello();
+    (void) Initialize(argc, argv);
+    
+    int argc_ = argc;
+    char **argv_ = argv;
+    
+/*
 #ifdef THREADS
-    for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
+    for (argc_--, argv_++; argc_ > 0; argc_ -= argCount, argv_ += argCount) {
       argCount = 1;
-//用命令行实现TS
-      if(argv[0][0]=='T'&&argv[0][1]=='S')
-      {
-          testnum=3;
-       }
-else{
-      switch (argv[0][1]) {
+      
+      switch (argv_[0][1]) {
       case 'q':
-        testnum = atoi(argv[1]);  //  printf("testnum: %d\n", testnum);
+        testnum = atoi(argv_[1]);
         argCount++;
         break;
-  //    case'T':
-//	if(argv[1]=='S')
-//	{
-//	    testnum = 3;
-	//    break;
-	//}
+     
       default:
         testnum = 1;
         break;
       }
     }
-    }
 
-    ThreadTest();  //threadtest.cc中的函数
+    //ThreadTest();
+    //ts();
+    printf("test");
 #endif
-
+*/
     for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
 	argCount = 1;
         if (!strcmp(*argv, "-z"))               // print copyright
             printf (copyright);
+            
+        //******************************
+        if (!strcmp(*argv, "-ts"))
+            ts();
+        //******************************
+            
 #ifdef USER_PROGRAM
         if (!strcmp(*argv, "-x")) {        	// run a user program
 	    ASSERT(argc > 1);
             StartProcess(*(argv + 1));
+            //Thread *p1 = new Thread("p1", 8);
+            //Thread *p2 = new Thread("p2", 8);
+            //Thread *p3 = new Thread("p1", 8);
+            //Thread *p4 = new Thread("p2", 8);
+            //p1->Fork(StartProcess, "../test/matmult");
+            //p2->Fork(StartProcess, "../test/sort");
+            //p3->Fork(StartProcess, "../test/matmult");
+            //p4->Fork(StartProcess, "../test/sort");
+            
             argCount = 2;
         } else if (!strcmp(*argv, "-c")) {      // test the console
 	    if (argc == 1)
-	        ConsoleTest(NULL, NULL);
+	        SyncConsoleTest(NULL, NULL);
 	    else {
 		ASSERT(argc > 2);
-	        ConsoleTest(*(argv + 1), *(argv + 2));
+	        SyncConsoleTest(*(argv + 1), *(argv + 2));
 	        argCount = 3;
 	    }
 	    interrupt->Halt();		// once we start the console, then 
@@ -141,7 +157,15 @@ else{
 	}
 #endif // USER_PROGRAM
 #ifdef FILESYS
-	if (!strcmp(*argv, "-cp")) { 		// copy from UNIX to Nachos
+	if (!strcmp(*argv, "-ld")) { 		// copy from UNIX to Nachos
+	    ASSERT(argc > 1);
+	    ListDirectory(*(argv + 1));
+	    argCount = 2;
+	} else if (!strcmp(*argv, "-md")) { 		// copy from UNIX to Nachos
+	    ASSERT(argc > 1);
+	    MakeDirectory(*(argv + 1));
+	    argCount = 2;
+	} else if (!strcmp(*argv, "-cp")) { 		// copy from UNIX to Nachos
 	    ASSERT(argc > 2);
 	    Copy(*(argv + 1), *(argv + 2));
 	    argCount = 3;
@@ -158,7 +182,14 @@ else{
 	} else if (!strcmp(*argv, "-D")) {	// print entire filesystem
             fileSystem->Print();
 	} else if (!strcmp(*argv, "-t")) {	// performance test
-            PerformanceTest();
+            SyncTest();
+	} else if (!strcmp(*argv, "-t1")) {	// performance test
+	    PipeWriteTest();
+	} else if (!strcmp(*argv, "-t2")) {	// performance test
+            PipeReadTest();
+    }
+      else if (!strcmp(*argv, "-pipe")) {	// performance test
+            PipeTest();
 	}
 #endif // FILESYS
 #ifdef NETWORK

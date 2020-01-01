@@ -56,28 +56,16 @@
 #define StackSize	(4 * 1024)	// in words
 
 
-#define InitialTimeSlice 2
-
-
 // Thread state
 enum ThreadStatus { JUST_CREATED, RUNNING, READY, BLOCKED };
 
 // external function, dummy routine whose sole job is to call Thread::Print
 extern void ThreadPrint(int arg);	 
 
-//allocate a thread ID for the new thread
-int AllocateTID();
-
-//print thread status information
-extern void MyThreadStatusPrint(int a);
-
-//used to print thread status
-const char* const ThreadStatusChar[]={"JUST_CREATED", "RUNNING", "READY", "BLOCKED"};
-
 // The following class defines a "thread control block" -- which
 // represents a single thread of execution.
 //
-//  Every thread has:  (PCB)
+//  Every thread has:
 //     an execution stack for activation records ("stackTop" and "stack")
 //     space to save CPU registers while not running ("machineState")
 //     a "status" (running/ready/blocked)
@@ -85,34 +73,28 @@ const char* const ThreadStatusChar[]={"JUST_CREATED", "RUNNING", "READY", "BLOCK
 //  Some threads also belong to a user address space; threads
 //  that only run in the kernel have a NULL address space.
 
+
+struct Message
+{
+    bool valid;
+    int destination;
+    char* content;
+};
+
+
 class Thread {
   private:
     // NOTE: DO NOT CHANGE the order of these first two members.
     // THEY MUST be in this position for SWITCH to work.
     int* stackTop;			 // the current stack pointer
     void *machineState[MachineStateSize];  // all registers except for stackTop
-    int tid, uid;             //thread ID, user ID
-    int priority;             //priority =0  the high priority, 8 the lowest
-    int TimeSlice;            //time slice
 
   public:
-    Thread(char* debugName, int p=8);		// initialize a Thread 
+    Thread(char* debugName, int prior = 0);		// initialize a Thread 
     ~Thread(); 				// deallocate a Thread
 					// NOTE -- thread being deleted
 					// must not be running when delete 
 					// is called
-    //get thread ID and user ID
-    int GetTid();
-    int GetUid();
-    //set and get thread's priority
-    void SetPriority(int p);
-    int GetPriority();
-
-    //get,set,reduce time slice
-    int GetTimeSlice();
-    void SetTimeSlice(int t);
-    void ReduceTimeSlice(int r);
-
 
     // basic thread operations
 
@@ -128,7 +110,6 @@ class Thread {
     void setStatus(ThreadStatus st) { status = st; }
     char* getName() { return (name); }
     void Print() { printf("%s, ", name); }
-    ThreadStatus GetStatus();
 
   private:
     // some of the private data for this class is listed above
@@ -143,6 +124,33 @@ class Thread {
     					// Allocate a stack for thread.
 					// Used internally by Fork()
 
+ //****************************									
+  private: 
+    // add for uid tid
+    int uid;		// User id
+    int tid;		// Thread id
+    int allocateTid();
+    
+  public:
+    int GetUid() { return uid; }	// To get user id
+    int GetTid() { return tid; }	// To get thread id
+    ThreadStatus GetStatus() { return status; }
+  //****************************
+  
+   //****************************									
+  private: 
+    // lab2
+    int priority; // 0 - 16
+    int pastSlice;
+    
+  public:
+    int getPriority() { return priority; }
+    void setPriority(int p) { priority = p; } 
+    int getSlice() { return pastSlice; }
+    void slicePlus() { pastSlice++; }
+    void sliceClear() { pastSlice = 0; }
+  //****************************
+
 #ifdef USER_PROGRAM
 // A thread running a user program actually has *two* sets of CPU registers -- 
 // one for its state while executing user code, one for its state 
@@ -155,6 +163,7 @@ class Thread {
     void RestoreUserState();		// restore user-level register state
 
     AddrSpace *space;			// User code this thread is running.
+    char fileName[10];
 #endif
 };
 

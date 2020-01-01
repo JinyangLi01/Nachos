@@ -19,8 +19,6 @@
 #include "switch.h"
 #include "synch.h"
 #include "system.h"
-#include "unistd.h"   //C和C++中提供的对POSIX操作系统的访问功能的头文件
-
 
 #define STACK_FENCEPOST 0xdeadbeef	// this is put at the top of the
 					// execution stack, for detecting 
@@ -34,67 +32,45 @@
 //	"threadName" is an arbitrary string, useful for debugging.
 //----------------------------------------------------------------------
 
-Thread::Thread(char* threadName, int p=8)
+//****************************************************
+int
+Thread::allocateTid() 
 {
+    for (int i = 0; i < 128; ++i) {
+    	if (!tidArray[i]) {
+    	    tidArray[i] = 1;
+    	    threadArray[i] = this; //?
+    	    printf("Thread ID is %d\n", i);
+    	    return i;
+    	}
+    }
+    return -1;
+}
+//*****************************************************
+
+
+Thread::Thread(char* threadName, int prior = 0)
+{
+//**********************************************
+    int temp = allocateTid();
+    if (temp == -1) printf("128 threads have been allocated! No vacancies for now!\n");
+    ASSERT(temp != -1);
+//**********************************************
+
+    priority = prior;
+    pastSlice = 0;
+
     name = threadName;
     stackTop = NULL;
     stack = NULL;
     status = JUST_CREATED;
+//*****************************************
+    tid = temp;
+//*****************************************
+
 #ifdef USER_PROGRAM
     space = NULL;
 #endif
-
-    if(p>8)
-        priority=8;
-    else if(p<0)
-        priority=0;
-    else
-        priority = p;
-
-    TimeSlice = InitialTimeSlice;
-
-    uid=getuid();//get current linux user id as uid, since there is only one user at a time
-    //allocate Thread ID for the current thread
-    int flag = AllocateTID();
-    if (flag==-1)
-    {
-	printf("Max number of thread exceeded, user %d cannot create the thread.", this->uid);
-        return;
-    }
-    tid = flag;	  
-}
-
-
-// if there is an avaiable tid, return it, otherwise, return -1
-int AllocateTID()
-{
-    for(int i=0; i<MaxThread; ++i)
-        {
-            if(TidFlag[i]==0)
-	    {
-	        TidFlag[i]=1;
-	        return i;
-	    }
-	}
-    return -1;
-}
-
-
-//return thread status
-ThreadStatus Thread::GetStatus()
-{
-    switch(status){
-    case JUST_CREATED:
-	return 0; break;
-    case RUNNING:
-	return 1; break;
-    case READY:
-	return 2; break;
-    case BLOCKED:
-	return 3; break;
-    default: 
-	printf("GetStatus error\n"); break;
-    }
 }
 
 //----------------------------------------------------------------------
@@ -109,56 +85,20 @@ ThreadStatus Thread::GetStatus()
 //      as part of starting up Nachos.
 //----------------------------------------------------------------------
 
-Thread::~Thread()	
+Thread::~Thread()
 {
     DEBUG('t', "Deleting thread \"%s\"\n", name);
 
     ASSERT(this != currentThread);
+    
+    //*******************************
+    tidArray[tid] = 0;
+    threadArray[tid] = NULL;
+    //*******************************
+    
     if (stack != NULL)
 	DeallocBoundedArray((char *) stack, StackSize * sizeof(int));
-    TidFlag[tid]=0;
 }
-
-// GetTid, GetUid: get the thread ID and user ID
-
-int Thread::GetTid()
-{
-    return tid;
-}
-int Thread::GetUid()
-{
-    return this->uid;
-}
-
-//Set proority and get priority
-
-void Thread::SetPriority(int p)
-{
-    priority = p;
-}
-
-int Thread::GetPriority()
-{
-    return priority;
-}
-
-
-//get,set,reduce time slice
-int Thread::GetTimeSlice()
-{
-    return TimeSlice;
-}
-
-void Thread::SetTimeSlice(int t)
-{
-    TimeSlice = t;
-}
-
-void Thread::ReduceTimeSlice(int r)
-{
-    TimeSlice -= r;
-}
-
 
 //----------------------------------------------------------------------
 // Thread::Fork
@@ -192,6 +132,9 @@ Thread::Fork(VoidFunctionPtr func, void *arg)
     scheduler->ReadyToRun(this);	// ReadyToRun assumes that interrupts 
 					// are disabled!
     (void) interrupt->SetLevel(oldLevel);
+    
+    //if (this.getPriority() < currentThread.getPriority())
+     //   currentThread->Yield();
 }    
 
 //----------------------------------------------------------------------
@@ -244,6 +187,12 @@ Thread::Finish ()
     
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
     
+    //ADD!!!
+#ifdef USER_PROGRAM
+    //space->RemoveVirtFile();
+#endif
+    //ADD!!!
+    
     threadToBeDestroyed = currentThread;
     Sleep();					// invokes SWITCH
     // not reached
@@ -270,24 +219,21 @@ Thread::Finish ()
 void
 Thread::Yield ()
 {
+    //printf("enter yield");
     Thread *nextThread;
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     
     ASSERT(this == currentThread);
     
     DEBUG('t', "Yielding thread \"%s\"\n", getName());
-
-//先将当前线程加入就绪队列，再选择线程来运行，实现所有线程根据优先级高低进行选择强占
-    scheduler->ReadyToRun(this);    
-    nextThread = scheduler->FindNextToRun();
     
-    //reset time slice of current thread
- //   SetTimeSlice(InitialTimeSlice);
-
-    if (nextThread != NULL) {
+    nextThread = scheduler->FindNextToRun();
+    if (nextThread != NULL && nextThread->getPriority() <= currentThread->getPriority()) {
+	scheduler->ReadyToRun(this);
 	scheduler->Run(nextThread);
+    } else if (nextThread != NULL) {
+    	scheduler->ReadyToRun(nextThread);
     }
-
     (void) interrupt->SetLevel(oldLevel);
 }
 
@@ -323,10 +269,7 @@ Thread::Sleep ()
     status = BLOCKED;
     while ((nextThread = scheduler->FindNextToRun()) == NULL)
 	interrupt->Idle();	// no one to run, wait for an interrupt
-
-    //reset time slice of current thread
-   // SetTimeSlice(InitialTimeSlice);
-
+        
     scheduler->Run(nextThread); // returns when we've been signalled
 }
 
@@ -423,3 +366,4 @@ Thread::RestoreUserState()
 	machine->WriteRegister(i, userRegisters[i]);
 }
 #endif
+

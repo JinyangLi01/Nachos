@@ -38,9 +38,6 @@
 #include "copyright.h"
 #include "list.h"
 
-//什么时候时钟会前进：
-
-
 // Interrupts can be disabled (IntOff) or enabled (IntOn)
 enum IntStatus { IntOff, IntOn };
 

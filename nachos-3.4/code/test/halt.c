@@ -12,9 +12,16 @@
 
 #include "syscall.h"
 
+int fd1, fd2;
+char temp[30];
+int len;
+
+
 int
 main()
 {
-    Halt();
+    int tid = Exec("sort");
+    Yield();
+    //Halt();
     /* not reached */
 }

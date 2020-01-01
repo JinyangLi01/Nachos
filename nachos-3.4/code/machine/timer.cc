@@ -24,7 +24,6 @@
 #include "system.h"
 
 // dummy function because C++ does not allow pointers to member functions
-//每次时钟中断时中断处理函数，函数再次产生一个时钟中断，两个函数相互调用循环向前走，模拟时钟前进
 static void TimerHandler(int arg)
 { Timer *p = (Timer *)arg; p->TimerExpired(); }
 
@@ -65,20 +64,6 @@ Timer::TimerExpired()
     // schedule the next timer device interrupt
     interrupt->Schedule(TimerHandler, (int) this, TimeOfNextInterrupt(), 
 		TimerInt);
-    
- /*   
-    // reduce time slice of the current thread
-    MachineStatus status = Interrupt->getStatus();
-    if (status != IdleMode)
-    {
-	currentThread->ReduceTimeSlice(TimeTicks);
-	if(currentThread->GetTimeSlice() <=0)
-	{
-	    crrentThread->SetPriority(InitialPriority);
-	    currentThread->Yield();
-	}
-    }
-    */
 
     // invoke the Nachos interrupt handler for this device
     (*handler)(arg);

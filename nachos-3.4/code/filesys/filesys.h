@@ -43,7 +43,7 @@
 				// implementation is available
 class FileSystem {
   public:
-    FileSystem(bool format) {}
+    FileSystem(bool format = 1) {}
 
     bool Create(char *name, int initialSize) { 
 	int fileDescriptor = OpenForWrite(name);
@@ -67,7 +67,7 @@ class FileSystem {
 #else // FILESYS
 class FileSystem {
   public:
-    FileSystem(bool format);		// Initialize the file system.
+    FileSystem(bool format = 1);		// Initialize the file system.
 					// Must be called *after* "synchDisk" 
 					// has been initialized.
     					// If "format", there is nothing on
@@ -84,6 +84,14 @@ class FileSystem {
     void List();			// List all the files in the file system
 
     void Print();			// List all the files and their contents
+    
+    void ListDir(char *name);
+    
+    int ReadPipe(char *data);
+    int WritePipe(char *data, int len);
+
+    void WriteIntoPipe(char*data, int length, int from, int to);
+    int ReadFromPipe(char*data, int from, int to);
 
   private:
    OpenFile* freeMapFile;		// Bit map of free disk blocks,

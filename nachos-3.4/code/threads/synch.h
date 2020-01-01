@@ -76,12 +76,12 @@ class Lock {
 					// holds this lock.  Useful for
 					// checking in Release, and in
 					// Condition variable ops below.
-    Thread* GetOwner() {return owner;}
+
   private:
     char* name;				// for debugging
-    Semaphore* lock;
-    Thread* owner;
     // plus some other stuff you'll need to define
+    Semaphore* sem_lock;
+    Thread* held_thread;
 };
 
 // The following class defines a "condition variable".  A condition
@@ -133,7 +133,7 @@ class Condition {
 
   private:
     char* name;
-    List * waitQueue;
     // plus some other stuff you'll need to define
+    List *queue;
 };
 #endif // SYNCH_H

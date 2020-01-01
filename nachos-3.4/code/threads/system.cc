@@ -19,6 +19,11 @@ Statistics *stats;			// performance metrics
 Timer *timer;				// the hardware timer device,
 					// for invoking context switches
 
+//************************************				
+int tidArray[128];
+Thread *threadArray[128];
+//************************************
+
 #ifdef FILESYS_NEEDED
 FileSystem  *fileSystem;
 #endif
@@ -39,8 +44,7 @@ PostOffice *postOffice;
 // External definition, to allow us to take a pointer to this function
 extern void Cleanup();
 
-//
-int TidFlag[MaxThread];
+Message message[20];
 
 //----------------------------------------------------------------------
 // TimerInterruptHandler
@@ -62,17 +66,13 @@ int TidFlag[MaxThread];
 static void
 TimerInterruptHandler(int dummy)
 {
-    printf("Tick! "); // used in lab2 testing
-
-
-    if (interrupt->getStatus() != IdleMode)
-    {
-	currentThread->ReduceTimeSlice(1);
-        if(currentThread->GetTimeSlice() <=0)
-        { 
-	//    currentThread->SetTimeSlice(InitialTimeSlice);
+    if (interrupt->getStatus() != IdleMode){
+	//printf("test\n");
+	currentThread->slicePlus();
+	if (currentThread->getSlice() == TimeSlice) {
+	    currentThread->sliceClear();
 	    interrupt->YieldOnReturn();
-        }
+	}
     }
 }
 
@@ -93,13 +93,13 @@ Initialize(int argc, char **argv)
     char* debugArgs = "";
     bool randomYield = FALSE;
 
-#ifdef USER_PROGRAM // 用户程序
+#ifdef USER_PROGRAM
     bool debugUserProg = FALSE;	// single step user program
 #endif
-#ifdef FILESYS_NEEDED //文件系统
+#ifdef FILESYS_NEEDED
     bool format = FALSE;	// format disk
 #endif
-#ifdef NETWORK  //网络
+#ifdef NETWORK
     double rely = 1;		// network reliability
     int netname = 0;		// UNIX socket name
 #endif
@@ -145,15 +145,23 @@ Initialize(int argc, char **argv)
     stats = new Statistics();			// collect statistics
     interrupt = new Interrupt;			// start up interrupt handling
     scheduler = new Scheduler();		// initialize the ready queue
-  //  if (randomYield)				// start the timer (if needed)
+    //if (randomYield)				// start the timer (if needed)
 	timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
     threadToBeDestroyed = NULL;
+    
+    //*******************************************************
+    //add for thread controll
+    for (int i = 0; i < 128; ++i) {
+    	tidArray[i] = 0;
+    }
+    //*******************************************************
+    
 
     // We didn't explicitly allocate the current thread we are running in.
     // But if it ever tries to give up the CPU, we better have a Thread
     // object to save its state. 
-    currentThread = new Thread("main");		
+    currentThread = new Thread("main", 8);		
     currentThread->setStatus(RUNNING);
 
     interrupt->Enable();
@@ -175,9 +183,9 @@ Initialize(int argc, char **argv)
     postOffice = new PostOffice(netname, rely, 10);
 #endif
 
-    for (int i=0;i<MaxThread;i++)
+    for (int i = 0; i < 20; ++i)
     {
-        TidFlag[i]=0;
+        message[i].valid = FALSE;
     }
 }
 
@@ -212,3 +220,32 @@ Cleanup()
     Exit(0);
 }
 
+
+void Send(char* input_str, int destination)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        if (message[i].valid == FALSE)
+        {
+            message[i].valid = TRUE;
+            message[i].destination = destination;
+            message[i].content = input_str;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+char* Receive(int destination)
+{
+    for (int i = 0; i < 20; ++i)
+    {
+        if (message[i].valid == TRUE && 
+            message[i].destination == destination)
+        {
+            message[i].valid = FALSE;
+            return message[i].content;
+        }
+    }
+    return NULL;
+}

@@ -32,6 +32,9 @@ OpenFile::OpenFile(int sector)
     hdr = new FileHeader;
     hdr->FetchFrom(sector);
     seekPosition = 0;
+    sector_pos = sector;
+    // !!!
+    synchDisk->fileCount[sector]++;
 }
 
 //----------------------------------------------------------------------
@@ -41,6 +44,7 @@ OpenFile::OpenFile(int sector)
 
 OpenFile::~OpenFile()
 {
+    synchDisk->fileCount[hdr->sectorNum]--;
     delete hdr;
 }
 
@@ -119,6 +123,12 @@ OpenFile::ReadAt(char *into, int numBytes, int position)
     int fileLength = hdr->FileLength();
     int i, firstSector, lastSector, numSectors;
     char *buf;
+    
+    // ADD!!!
+    hdr->setTime(1);
+    hdr->WriteBack(hdr->sectorNum);   
+    //hdr->Print();
+    // ADD!!!
 
     if ((numBytes <= 0) || (position >= fileLength))
     	return 0; 				// check request
@@ -126,6 +136,8 @@ OpenFile::ReadAt(char *into, int numBytes, int position)
 	numBytes = fileLength - position;
     DEBUG('f', "Reading %d bytes at %d, from file of length %d.\n", 	
 			numBytes, position, fileLength);
+			
+
 
     firstSector = divRoundDown(position, SectorSize);
     lastSector = divRoundDown(position + numBytes - 1, SectorSize);
@@ -134,7 +146,7 @@ OpenFile::ReadAt(char *into, int numBytes, int position)
     // read in all the full and partial sectors that we need
     buf = new char[numSectors * SectorSize];
     for (i = firstSector; i <= lastSector; i++)	
-        synchDisk->ReadSector(hdr->ByteToSector(i * SectorSize), 
+        synchDisk->SyncRead(hdr->ByteToSector(i * SectorSize), 
 					&buf[(i - firstSector) * SectorSize]);
 
     // copy the part we want
@@ -150,13 +162,34 @@ OpenFile::WriteAt(char *from, int numBytes, int position)
     int i, firstSector, lastSector, numSectors;
     bool firstAligned, lastAligned;
     char *buf;
+    
+    // ADD!!!
+    hdr->setTime(2);
+    hdr->WriteBack(hdr->sectorNum);   
+    //hdr->Print();
+    // ADD!!!
+    
+    //printf("numBytes %d, position %d\n", numBytes, position);
 
-    if ((numBytes <= 0) || (position >= fileLength))
+    if ((numBytes <= 0) || (position > fileLength))
 	return 0;				// check request
-    if ((position + numBytes) > fileLength)
-	numBytes = fileLength - position;
+    if ((position + numBytes) > fileLength) {
+    	OpenFile *file = new OpenFile(0);
+    	BitMap *freeMap = new BitMap(NumSectors);
+    	freeMap->FetchFrom(file);
+    	if (!hdr->Extend(freeMap, position + numBytes - fileLength)) {
+       	    numBytes = fileLength - position;
+       	    if (numBytes == 0) return 0;
+       	}
+       	hdr->WriteBack(hdr->sectorNum);
+       	freeMap->WriteBack(file);
+       	delete file;
+       	delete freeMap;
+    }
     DEBUG('f', "Writing %d bytes at %d, from file of length %d.\n", 	
 			numBytes, position, fileLength);
+			
+
 
     firstSector = divRoundDown(position, SectorSize);
     lastSector = divRoundDown(position + numBytes - 1, SectorSize);
@@ -179,7 +212,7 @@ OpenFile::WriteAt(char *from, int numBytes, int position)
 
 // write modified sectors back
     for (i = firstSector; i <= lastSector; i++)	
-        synchDisk->WriteSector(hdr->ByteToSector(i * SectorSize), 
+        synchDisk->SyncWrite(hdr->ByteToSector(i * SectorSize), 
 					&buf[(i - firstSector) * SectorSize]);
     delete [] buf;
     return numBytes;

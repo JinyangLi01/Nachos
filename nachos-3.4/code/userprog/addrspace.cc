@@ -45,6 +45,38 @@ SwapHeader (NoffHeader *noffH)
 	noffH->uninitData.inFileAddr = WordToHost(noffH->uninitData.inFileAddr);
 }
 
+AddrSpace::AddrSpace(int tid, int currentTid, unsigned int pages) {
+    char currentName[20];
+    sprintf(currentName, "%d", currentTid);
+    strcat(currentName, "virtual-memory");    
+    
+    sprintf(name, "%d", tid);
+    strcat(name, "virtual-memory");
+    
+    numPages = pages;
+    
+    OpenFile *v1 = fileSystem->Open(currentName);
+    int len = v1->Length();
+    
+    char *temp = new char[len];
+    
+    fileSystem->Create(name, len);
+    OpenFile *v2 = fileSystem->Open(name);
+    
+    v1->Read(temp, len);
+    v2->Write(temp, len);
+    
+    for (int i = 0; i < NumPhysPages; ++i) {
+    	if (machine->bitMap[i].valid == TRUE && machine->bitMap[i].tid == currentTid && machine->bitMap[i].dirty) {
+    	    v2->WriteAt(&(machine->mainMemory[i * PageSize]), PageSize, machine->bitMap[i].virtualPage * PageSize);
+    	}
+    }
+    
+    
+    delete v1;
+    delete v2;
+}
+
 //----------------------------------------------------------------------
 // AddrSpace::AddrSpace
 // 	Create an address space to run a user program.
@@ -78,7 +110,7 @@ AddrSpace::AddrSpace(OpenFile *executable)
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
 
-    ASSERT(numPages <= NumPhysPages);		// check we're not trying
+    //ASSERT(numPages <= NumPhysPages);		// check we're not trying
 						// to run anything too big --
 						// at least until we have
 						// virtual memory
@@ -86,36 +118,83 @@ AddrSpace::AddrSpace(OpenFile *executable)
     DEBUG('a', "Initializing address space, num pages %d, size %d\n", 
 					numPages, size);
 // first, set up the translation 
+ 
+ /*   printf("Allocate physical page for Thread %d\n", currentThread->GetTid());
     pageTable = new TranslationEntry[numPages];
     for (i = 0; i < numPages; i++) {
-	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
-	pageTable[i].physicalPage = i;
-	pageTable[i].valid = TRUE;
-	pageTable[i].use = FALSE;
-	pageTable[i].dirty = FALSE;
-	pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
+	//pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
+	//pageTable[i].physicalPage = machine->search(i);
+	pageTable[i].valid = FALSE;
+	//pageTable[i].use = FALSE;
+	//pageTable[i].dirty = FALSE;
+	//pageTable[i].readOnly = FALSE;  // if the code segment was entirely on 
 					// a separate page, we could set its 
 					// pages to be read-only
     }
     
 // zero out the entire address space, to zero the unitialized data segment 
 // and the stack segment
-    bzero(machine->mainMemory, size);
+    //bzero(machine->mainMemory, size); // ????
+    int page, offset;
 
 // then, copy in the code and data segments into memory
     if (noffH.code.size > 0) {
         DEBUG('a', "Initializing code segment, at 0x%x, size %d\n", 
 			noffH.code.virtualAddr, noffH.code.size);
-        executable->ReadAt(&(machine->mainMemory[noffH.code.virtualAddr]),
-			noffH.code.size, noffH.code.inFileAddr);
+        //executable->ReadAt(&(machine->mainMemory[noffH.code.virtualAddr]),
+	//		noffH.code.size, noffH.code.inFileAddr);
+	page = noffH.code.virtualAddr / PageSize;
+	offset = noffH.code.virtualAddr % PageSize;
+	for (i = 0; i < noffH.code.size; ++i) {
+	    if (offset == PageSize) {
+	        offset = 0;
+	        page++;
+	    } 
+	    executable->ReadAt(&(machine->mainMemory[pageTable[page].physicalPage * PageSize + offset]),
+			1, noffH.code.inFileAddr + i);
+            offset++;
+	}
     }
     if (noffH.initData.size > 0) {
         DEBUG('a', "Initializing data segment, at 0x%x, size %d\n", 
 			noffH.initData.virtualAddr, noffH.initData.size);
-        executable->ReadAt(&(machine->mainMemory[noffH.initData.virtualAddr]),
-			noffH.initData.size, noffH.initData.inFileAddr);
+        //executable->ReadAt(&(machine->mainMemory[noffH.initData.virtualAddr]),
+	//		noffH.initData.size, noffH.initData.inFileAddr);
+	page = noffH.initData.virtualAddr / PageSize;
+	offset = noffH.initData.virtualAddr % PageSize;
+	for (i = 0; i < noffH.initData.size; ++i) {
+	    if (offset == PageSize) {
+	        offset = 0;
+	        page++;
+	    } 
+	    executable->ReadAt(&(machine->mainMemory[pageTable[page].physicalPage * PageSize + offset]),
+			1, noffH.initData.inFileAddr + i);
+            offset++;
+	}
     }
-
+ */   
+    // ADD!!!
+    sprintf(name, "%d", currentThread->GetTid());
+    strcat(name, "virtual-memory");
+    fileSystem->Create(name, size);
+    printf("Writing to virtual file\n");
+    
+    OpenFile *v = fileSystem->Open(name);
+    char ch = 0;
+    for (i = 0; i < size; ++i)
+    	v->WriteAt(&ch, 1, i);
+    if (noffH.code.size > 0) {
+    	char *temp = new char[noffH.code.size + 1];
+    	executable->ReadAt(temp, noffH.code.size, noffH.code.inFileAddr);
+    	v->WriteAt(temp, noffH.code.size, noffH.code.virtualAddr);
+    }
+    if (noffH.initData.size > 0) {
+    	char *temp = new char[noffH.initData.size + 1];
+    	executable->ReadAt(temp, noffH.initData.size, noffH.initData.inFileAddr); 	
+    	v->WriteAt(temp, noffH.initData.size, noffH.initData.virtualAddr);
+    }
+    delete v;  
+    //ADD!!! 
 }
 
 //----------------------------------------------------------------------
@@ -125,7 +204,7 @@ AddrSpace::AddrSpace(OpenFile *executable)
 
 AddrSpace::~AddrSpace()
 {
-   delete pageTable;
+   //delete pageTable;
 }
 
 //----------------------------------------------------------------------
@@ -169,7 +248,9 @@ AddrSpace::InitRegisters()
 //----------------------------------------------------------------------
 
 void AddrSpace::SaveState() 
-{}
+{
+    //machine->clearTLB();
+}
 
 //----------------------------------------------------------------------
 // AddrSpace::RestoreState
@@ -181,6 +262,11 @@ void AddrSpace::SaveState()
 
 void AddrSpace::RestoreState() 
 {
-    machine->pageTable = pageTable;
+    //machine->pageTable = pageTable;
     machine->pageTableSize = numPages;
+}
+
+void AddrSpace::RemoveVirtFile() 
+{
+    fileSystem->Remove(name);
 }

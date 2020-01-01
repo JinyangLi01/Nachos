@@ -22,9 +22,7 @@ extern void Initialize(int argc, char **argv); 	// Initialization,
 extern void Cleanup();				// Cleanup, called when
 						// Nachos is done.
 
-
-extern void ReadyQueuePrint();                 //threadtest.cc
-
+extern Message message[20];
 
 extern Thread *currentThread;			// the thread holding the CPU
 extern Thread *threadToBeDestroyed;  		// the thread that just finished
@@ -32,8 +30,11 @@ extern Scheduler *scheduler;			// the ready list
 extern Interrupt *interrupt;			// interrupt status
 extern Statistics *stats;			// performance metrics
 extern Timer *timer;				// the hardware alarm clock
-#define MaxThread 128
-extern int TidFlag[MaxThread];                      //whether a Thread ID has been allocated
+
+//*********************************************
+extern int tidArray[128];
+extern Thread *threadArray[128];
+//*********************************************
 
 #ifdef USER_PROGRAM
 #include "machine.h"
@@ -46,7 +47,7 @@ extern FileSystem  *fileSystem;
 #endif
 
 #ifdef FILESYS
-#include "synchdisk.h"
+#include "../filesys/synchdisk.h"
 extern SynchDisk   *synchDisk;
 #endif
 

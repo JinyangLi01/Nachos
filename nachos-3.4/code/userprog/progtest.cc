@@ -13,6 +13,7 @@
 #include "console.h"
 #include "addrspace.h"
 #include "synch.h"
+#include "syncconsole.h"
 
 //----------------------------------------------------------------------
 // StartProcess
@@ -32,6 +33,7 @@ StartProcess(char *filename)
     }
     space = new AddrSpace(executable);    
     currentThread->space = space;
+    strcpy(currentThread->fileName, filename);
 
     delete executable;			// close file
 
@@ -82,3 +84,19 @@ ConsoleTest (char *in, char *out)
 	if (ch == 'q') return;  // if q, quit
     }
 }
+
+SyncConsole *syncconsole;
+
+void 
+SyncConsoleTest (char *in, char *out) {
+    char ch;
+
+    syncconsole = new SyncConsole(in, out);
+    
+    for (;;) {
+	ch = syncconsole->GetChar();
+	syncconsole->PutChar(ch);
+	if (ch == 'q') return;  // if q, quit
+    }
+}
+
